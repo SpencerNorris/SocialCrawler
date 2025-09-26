@@ -1,0 +1,7 @@
+pydantic
+pydantic-settings
+httpx
+python-dotenv
+pandas
+google-cloud-storage
+pytest
