@@ -53,6 +53,38 @@ The command above searches `r/technology` for recent posts mentioning "openai", 
 > **Note:** If you encounter `RuntimeError: praw is required but not installed`, install the dependency with
 > `pip install praw` (or reinstall `requirements.txt`) before running the scraper.
 
+### Using a JSON Config File
+
+Instead of passing multiple flags, provide a JSON file and point the CLI at it with `--config`:
+
+```json
+{
+  "queries": {
+    "queries": ["openai", "chatgpt"],
+    "subreddits": ["technology", "machinelearning"],
+    "sort": "top",
+    "time_filter": "week",
+    "max_posts": 25,
+    "media_only": true,
+    "download_media": true
+  },
+  "storage": {
+    "backend": "local",
+    "local_path": "cache"
+  },
+  "ledger": {
+    "mode": "csv",
+    "csv_path": "data/ledger.csv"
+  }
+}
+```
+
+Run the scraper with:
+
+```bash
+python -m social_crawler.cli --config config.json
+```
+
 ## Storage Backends
 
 - **Local** (default): caches JSON and media files to a directory you control.
