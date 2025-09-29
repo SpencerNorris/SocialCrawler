@@ -4,7 +4,8 @@ Small, configurable Reddit scraping utility built on the public Reddit API.
 
 ## Features
 
-- Script/app OAuth flow with environment based credentials.
+- Powered by [PRAW](https://praw.readthedocs.io/) for authenticated Reddit access.
+- Script/app OAuth flow with environment based credentials (read-only by default).
 - Query by free-form search strings and/or target subreddits.
 - Optional media-only filter with support for image/video downloads.
 - Pluggable cache storage (local filesystem or Google Cloud Storage).
@@ -18,9 +19,10 @@ Small, configurable Reddit scraping utility built on the public Reddit API.
 ```env
 REDDIT_CLIENT_ID=your_client_id
 REDDIT_CLIENT_SECRET=your_client_secret
+REDDIT_USER_AGENT=social-crawler/0.1 by your_username
+# Optional: add these to enable script (read/write) flows; omit for read-only access.
 REDDIT_USERNAME=reddit_username
 REDDIT_PASSWORD=reddit_password
-REDDIT_USER_AGENT=social-crawler/0.1 by your_username
 ```
 
 3. **Install dependencies** (Python 3.10+ recommended):
@@ -47,6 +49,9 @@ python -m social_crawler.cli \
 ```
 
 The command above searches `r/technology` for recent posts mentioning "openai", stores post JSON (and media files if present) under `cache/`, and writes a ledger row for each post at `data/ledger.csv`.
+
+> **Note:** If you encounter `RuntimeError: praw is required but not installed`, install the dependency with
+> `pip install praw` (or reinstall `requirements.txt`) before running the scraper.
 
 ## Storage Backends
 

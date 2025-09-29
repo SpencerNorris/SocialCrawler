@@ -25,9 +25,9 @@ class RedditCredentials(BaseSettings):
 
     client_id: str
     client_secret: str
-    username: str
-    password: str
     user_agent: str
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 
 class QueryConfig(BaseModel):
@@ -81,4 +81,3 @@ class ScraperConfig(BaseModel):
             self.ledger.csv_path.parent.mkdir(parents=True, exist_ok=True)
         if self.ledger.mode == "sqlite":
             self.ledger.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
-
