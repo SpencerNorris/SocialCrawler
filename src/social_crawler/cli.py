@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+from pathlib import Path
+from typing import Any, Dict
 
 from dotenv import load_dotenv
 
@@ -11,6 +14,7 @@ from .scraper import RedditScraper
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Reddit scraping utility")
+    parser.add_argument("--config", help="Path to JSON configuration file.")
     parser.add_argument("--query", action="append", default=[], help="Search query string. Repeatable.")
     parser.add_argument("--subreddit", action="append", default=[], help="Target subreddit. Repeatable.")
     parser.add_argument("--sort", default="new", choices=["relevance", "hot", "top", "new", "comments"], help="Sort order")
@@ -31,6 +35,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def build_config(ns: argparse.Namespace) -> ScraperConfig:
+    if ns.config:
+        return load_config_from_file(Path(ns.config))
+
     query_config = QueryConfig(
         queries=ns.query,
         subreddits=ns.subreddit,
@@ -56,6 +63,18 @@ def build_config(ns: argparse.Namespace) -> ScraperConfig:
     )
 
     return ScraperConfig(queries=query_config, storage=storage_config, ledger=ledger_config)
+
+
+def load_config_from_file(path: Path) -> ScraperConfig:
+    data = _load_json(path)
+    if hasattr(ScraperConfig, "model_validate"):
+        return ScraperConfig.model_validate(data)  # type: ignore[attr-defined]
+    return ScraperConfig.parse_obj(data)  # pragma: no cover - Pydantic v1 fallback
+
+
+def _load_json(path: Path) -> Dict[str, Any]:
+    with path.expanduser().open("r", encoding="utf-8") as infile:
+        return json.load(infile)
 
 
 def main(argv: list[str] | None = None) -> int:
