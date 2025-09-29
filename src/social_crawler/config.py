@@ -3,20 +3,31 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 try:  # Pydantic v2+
-    from pydantic_settings import BaseSettings  # type: ignore
+    from pydantic_settings import BaseSettings, SettingsConfigDict  # type: ignore
 except ImportError:  # pragma: no cover - for backward compatibility
     from pydantic import BaseSettings  # type: ignore
 
+    class SettingsConfigDict(dict):  # type: ignore
+        pass
+
 
 class RedditCredentials(BaseSettings):
-    client_id: str = Field(..., env="REDDIT_CLIENT_ID")
-    client_secret: str = Field(..., env="REDDIT_CLIENT_SECRET")
-    username: str = Field(..., env="REDDIT_USERNAME")
-    password: str = Field(..., env="REDDIT_PASSWORD")
-    user_agent: str = Field(..., env="REDDIT_USER_AGENT")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_prefix="REDDIT_",
+        case_sensitive=False,
+        extra="ignore",
+    )  # type: ignore[arg-type]
+
+    client_id: str
+    client_secret: str
+    user_agent: str
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 
 class QueryConfig(BaseModel):
@@ -28,14 +39,16 @@ class QueryConfig(BaseModel):
     media_only: bool = Field(False)
     download_media: bool = Field(False)
 
-    @validator("sort")
+    @field_validator("sort")
+    @classmethod
     def validate_sort(cls, value: str) -> str:
         allowed = {"relevance", "hot", "top", "new", "comments"}
         if value not in allowed:
             raise ValueError(f"sort must be one of {allowed}")
         return value
 
-    @validator("time_filter")
+    @field_validator("time_filter")
+    @classmethod
     def validate_time_filter(cls, value: str) -> str:
         allowed = {"all", "year", "month", "week", "day", "hour"}
         if value not in allowed:

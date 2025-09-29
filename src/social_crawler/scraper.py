@@ -23,7 +23,7 @@ class RedditScraper:
     ) -> None:
         config.ensure_paths()
         self.config = config
-        self.client = RedditClient(creds, session=session)
+        self.client = RedditClient(creds)
         self.storage: StorageBackend = build_storage_backend(
             config.storage.backend,
             local_path=config.storage.local_path,
