@@ -118,7 +118,13 @@ def make_credentials() -> RedditCredentials:
     )
 
 
-def make_post(post_id: str, media_url: str | None) -> RedditPost:
+def make_post(
+    post_id: str,
+    media_url: str | None,
+    *,
+    score: int = 0,
+    num_comments: int = 0,
+) -> RedditPost:
     return RedditPost(
         id=post_id,
         title=f"Post {post_id}",
@@ -128,7 +134,12 @@ def make_post(post_id: str, media_url: str | None) -> RedditPost:
         url=f"https://reddit.com/{post_id}",
         created_utc=1_650_000_000.0,
         media_url=media_url,
-        raw={"id": post_id, "media_url": media_url},
+        raw={
+            "id": post_id,
+            "media_url": media_url,
+            "score": score,
+            "num_comments": num_comments,
+        },
     )
 
 
@@ -158,6 +169,78 @@ def test_scraper_media_only_filters_and_records(tmp_path, monkeypatch: pytest.Mo
     assert (tmp_path / "cache" / "json" / "python" / "with_media.json").exists()
 
     scraper.close()
+
+
+def test_scraper_dedupes_same_post_within_run(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A post that matches multiple queries is still processed exactly once
+    per run — one ledger row, one media download.
+    """
+    creds = make_credentials()
+    query_config = QueryConfig(queries=[], subreddits=["python"], media_only=False, download_media=True)
+    storage_config = StorageConfig(backend="local", local_path=tmp_path / "cache")
+    ledger_config = LedgerConfig(mode="csv", csv_path=tmp_path / "ledger.csv")
+    config = ScraperConfig(queries=query_config, storage=storage_config, ledger=ledger_config)
+
+    dummy_client = DummyClient([
+        make_post("same", "https://cdn.example.com/file.mp4"),
+        make_post("same", "https://cdn.example.com/file.mp4"),
+        make_post("same", "https://cdn.example.com/file.mp4"),
+    ])
+    monkeypatch.setattr("social_crawler.scraper.RedditClient", lambda *args, **kwargs: dummy_client)
+
+    scraper = RedditScraper(creds, config, session=httpx.Client())
+    scraper.http = DummyHTTP(b"bytes")
+
+    scraper.run()
+
+    with (tmp_path / "ledger.csv").open("r", encoding="utf-8") as infile:
+        rows = list(csv.DictReader(infile))
+
+    assert [row["post_id"] for row in rows] == ["same"]
+    assert scraper.http.calls == ["https://cdn.example.com/file.mp4"]
+
+    scraper.close()
+
+
+def test_scraper_refreshes_known_post_without_redownloading(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On a subsequent run the scraper must NOT re-download a post it has
+    already seen, but MUST append a fresh ledger row carrying updated
+    engagement metadata (score, num_comments, scraped_utc).
+    """
+    creds = make_credentials()
+    query_config = QueryConfig(queries=[], subreddits=["python"], media_only=False, download_media=True)
+    storage_config = StorageConfig(backend="local", local_path=tmp_path / "cache")
+    ledger_config = LedgerConfig(mode="csv", csv_path=tmp_path / "ledger.csv")
+    config = ScraperConfig(queries=query_config, storage=storage_config, ledger=ledger_config)
+
+    first_client = DummyClient([make_post("abc", "https://cdn.example.com/a.mp4", score=10, num_comments=1)])
+    monkeypatch.setattr("social_crawler.scraper.RedditClient", lambda *args, **kwargs: first_client)
+    first_scraper = RedditScraper(creds, config, session=httpx.Client())
+    first_scraper.http = DummyHTTP(b"bytes")
+    first_scraper.run()
+    first_scraper.close()
+
+    # Second run: same post, updated engagement numbers.
+    second_client = DummyClient([make_post("abc", "https://cdn.example.com/a.mp4", score=250, num_comments=42)])
+    monkeypatch.setattr("social_crawler.scraper.RedditClient", lambda *args, **kwargs: second_client)
+    second_scraper = RedditScraper(creds, config, session=httpx.Client())
+    second_scraper.http = DummyHTTP(b"bytes")
+    second_scraper.run()
+    second_scraper.close()
+
+    with (tmp_path / "ledger.csv").open("r", encoding="utf-8") as infile:
+        rows = list(csv.DictReader(infile))
+
+    assert [row["post_id"] for row in rows] == ["abc", "abc"]
+    assert rows[0]["score"] == "10"
+    assert rows[0]["num_comments"] == "1"
+    assert rows[1]["score"] == "250"
+    assert rows[1]["num_comments"] == "42"
+    assert rows[1]["scraped_utc"] and rows[1]["scraped_utc"] != rows[0]["scraped_utc"]
+    # Second-run HTTP client made no media calls — we already have the file.
+    assert second_scraper.http.calls == []
 
 
 def test_scraper_downloads_media_when_requested(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
