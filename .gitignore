@@ -1,2 +1,9 @@
 __pycache__/
 .venv
+.venv.broken
+.env
+.DS_Store
+cache/
+data/
+cron.log
+.claude/
